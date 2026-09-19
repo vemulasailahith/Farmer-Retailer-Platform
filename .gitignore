@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+*.log
+
+# Flutter & Dart
+.dart_tool/
+**/build/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.pub-cache/
+**/.pub/
+
+# IDE and Editors
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Operating System Files
+.DS_Store
+Thumbs.db
