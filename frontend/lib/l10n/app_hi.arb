@@ -211,5 +211,12 @@
   "capacityAvailable": "उपलब्ध",
   "viewMarketDetails": "बाजार विवरण देखें",
   "startNewRecommendation": "नई अनुशंसा शुरू करें",
-  "marketDetailsNote": "विस्तृत बाजार व्यापार और रसद दृश्य।"
+  "marketDetailsNote": "विस्तृत बाजार व्यापार और रसद दृश्य।",
+  "season": "मौसम / सीजन",
+  "seasonKharif": "खरीफ",
+  "seasonRabi": "रबी",
+  "seasonSummer": "जायद / गर्मी",
+  "seasonWinter": "सर्दियां",
+  "seasonAutumn": "शरद ऋतु",
+  "seasonWholeYear": "पूरा साल"
 }

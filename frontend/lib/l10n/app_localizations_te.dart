@@ -662,4 +662,25 @@ class AppLocalizationsTe extends AppLocalizations {
 
   @override
   String get marketDetailsNote => 'వివరణాత్మక మార్కెట్ వాణిజ్య సమాచారం.';
+
+  @override
+  String get season => 'పంట కాలం (సీజన్)';
+
+  @override
+  String get seasonKharif => 'ఖరీఫ్';
+
+  @override
+  String get seasonRabi => 'రబీ';
+
+  @override
+  String get seasonSummer => 'వేసవి';
+
+  @override
+  String get seasonWinter => 'శీతాకాలం';
+
+  @override
+  String get seasonAutumn => 'శరదృతువు';
+
+  @override
+  String get seasonWholeYear => 'పూర్తి సంవత్సరం';
 }

@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from services.recommendation_service import FarmToMarketRecommendationService
 
@@ -40,6 +40,8 @@ def get_recommendation_service() -> FarmToMarketRecommendationService:
 # Pydantic Request Validation Models
 # ---------------------------------------------------------------------------
 class SupplyPayload(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     state_name: str
     dist_name: str
     crop: str
@@ -54,6 +56,11 @@ class SupplyPayload(BaseModel):
     rainfall_mm: float
     wind_speed_m_s: float
     solar_radiation_mj_m2_day: float
+    season: Optional[str] = "Whole Year"
+    fertilizer: Optional[float] = 0.0
+    pesticide: Optional[float] = 0.0
+    max_temperature: Optional[float] = None
+    min_temperature: Optional[float] = None
 
 
 class FarmerLocationPayload(BaseModel):
@@ -110,6 +117,26 @@ class RecommendationRequestPayload(BaseModel):
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+@app.get("/", status_code=status.HTTP_200_OK)
+def root() -> Dict[str, Any]:
+    """Root status endpoint providing API discovery and interactive documentation links."""
+    return {
+        "project": "Farm-to-Market Recommendation API",
+        "status": "online",
+        "version": "1.0.0",
+        "docs_url": "/docs",
+        "health_url": "/health",
+        "endpoints": {
+            "root": "GET /",
+            "health": "GET /health",
+            "recommend": "POST /api/v1/recommend",
+            "interactive_docs": "GET /docs",
+            "redoc": "GET /redoc",
+            "openapi": "GET /openapi.json",
+        },
+    }
+
+
 @app.get("/health", status_code=status.HTTP_200_OK)
 def health_check() -> Dict[str, str]:
     """Health check endpoint for container and client status verification."""

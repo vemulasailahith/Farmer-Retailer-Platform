@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/vegetable_item.dart';
+import '../../services/api_service.dart';
 import '../../services/location_service.dart';
+import '../../services/recommendation_repository.dart';
 import '../../services/reverse_geocoding_service.dart';
 import '../../services/weather_service.dart';
 import '../../widgets/farmer_drawer.dart';
@@ -10,7 +13,14 @@ import '../../widgets/language_selector.dart';
 import 'recommendation_screen.dart';
 
 class FarmerInputScreen extends StatefulWidget {
-  const FarmerInputScreen({super.key});
+  final bool isTab;
+  final void Function(RecommendationResponse response)? onRecommendationCompleted;
+
+  const FarmerInputScreen({
+    super.key,
+    this.isTab = true,
+    this.onRecommendationCompleted,
+  });
 
   @override
   State<FarmerInputScreen> createState() => _FarmerInputScreenState();
@@ -34,6 +44,7 @@ class _FarmerInputScreenState extends State<FarmerInputScreen> {
   WeatherData? _weatherData;
   bool _isLoadingWeather = false;
   bool _weatherError = false;
+  bool _isSubmitting = false;
 
   /// Exposes current weather data in screen state
   WeatherData? get weatherData => _weatherData;
@@ -58,6 +69,7 @@ class _FarmerInputScreenState extends State<FarmerInputScreen> {
   String? _locationErrorMessage;
 
   // Step 4: Advanced Environmental & Farming Inputs (Initially empty)
+  String _selectedSeason = 'Whole Year';
   final _yearController = TextEditingController();
   final _nReqController = TextEditingController();
   final _pReqController = TextEditingController();
@@ -69,6 +81,16 @@ class _FarmerInputScreenState extends State<FarmerInputScreen> {
   final _windSpeedController = TextEditingController();
   final _solarController = TextEditingController();
 
+  // Available Seasons matching trained ML model categories
+  final List<String> _seasons = const [
+    'Kharif',
+    'Rabi',
+    'Summer',
+    'Winter',
+    'Autumn',
+    'Whole Year',
+  ];
+
   // Available States
   final List<String> _states = [
     'Andhra Pradesh',
@@ -76,6 +98,17 @@ class _FarmerInputScreenState extends State<FarmerInputScreen> {
     'Karnataka',
     'Tamil Nadu',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    if (LocationService.cachedLatitude != null &&
+        LocationService.cachedLongitude != null) {
+      _latitude = LocationService.cachedLatitude;
+      _longitude = LocationService.cachedLongitude;
+      _accuracy = LocationService.cachedAccuracy;
+    }
+  }
 
   @override
   void dispose() {
@@ -112,6 +145,11 @@ class _FarmerInputScreenState extends State<FarmerInputScreen> {
       isCurrentStepValid = _step2FormKey.currentState?.validate() ?? false;
     } else if (_currentStep == 2) {
       isCurrentStepValid = _step3FormKey.currentState?.validate() ?? false;
+      if (isCurrentStepValid && _latitude != null && _longitude != null) {
+        LocationService.cachedLatitude = _latitude;
+        LocationService.cachedLongitude = _longitude;
+        LocationService.cachedAccuracy = _accuracy;
+      }
     } else if (_currentStep == 3) {
       isCurrentStepValid = _step4FormKey.currentState?.validate() ?? false;
     }
@@ -157,6 +195,9 @@ class _FarmerInputScreenState extends State<FarmerInputScreen> {
         _latitude = result.latitude;
         _longitude = result.longitude;
         _accuracy = result.accuracy;
+        LocationService.cachedLatitude = result.latitude;
+        LocationService.cachedLongitude = result.longitude;
+        LocationService.cachedAccuracy = result.accuracy;
         _locationErrorMessage = null;
         _isReverseGeocoding = true;
         _village = null;
@@ -305,61 +346,150 @@ class _FarmerInputScreenState extends State<FarmerInputScreen> {
     });
   }
 
-  void _handleFinalSubmit() {
+  Future<void> _handleFinalSubmit() async {
     final l10n = AppLocalizations.of(context)!;
 
-    // Collect all inputs into structured dictionary
+    // 1. Validate required crop
+    if (_selectedCrop == null || _selectedCrop!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.pleaseSelectVegetable),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    // 2. Validate farm area
+    final area = double.tryParse(_areaController.text.trim()) ?? 0.0;
+    if (area <= 0.0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.pleaseEnterValidArea),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    // 3. Validate GPS location (use state coordinates, or cached coordinates if previously obtained)
+    _latitude ??= LocationService.cachedLatitude;
+    _longitude ??= LocationService.cachedLongitude;
+    _accuracy ??= LocationService.cachedAccuracy;
+
+    if (_latitude == null || _longitude == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'GPS coordinates are required for accurate market matching. Please tap "Use My Location" in Step 3.',
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    final state = _selectedState ?? 'Andhra Pradesh';
+    final district = _districtController.text.trim().isNotEmpty
+        ? _districtController.text.trim()
+        : 'Guntur';
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    // 4. Collect all inputs into structured dictionary
     final collectedData = {
       'crop': _selectedCrop,
-      'area_ha': double.tryParse(_areaController.text.trim()) ?? 0.0,
-      'state_name': _selectedState,
-      'dist_name': _districtController.text.trim(),
-      'latitude': _latitude,
-      'longitude': _longitude,
+      'area_ha': area,
+      'state_name': state,
+      'dist_name': district,
+      'latitude': _latitude!,
+      'longitude': _longitude!,
       'year': int.tryParse(_yearController.text.trim()) ?? DateTime.now().year,
+      'season': _selectedSeason,
       'n_req_kg_per_ha': double.tryParse(_nReqController.text.trim()) ?? 0.0,
       'p_req_kg_per_ha': double.tryParse(_pReqController.text.trim()) ?? 0.0,
       'k_req_kg_per_ha': double.tryParse(_kReqController.text.trim()) ?? 0.0,
-      'temperature_c': double.tryParse(_tempController.text.trim()) ?? 0.0,
-      'humidity_percent': double.tryParse(_humidityController.text.trim()) ?? 0.0,
+      'temperature_c': double.tryParse(_tempController.text.trim()) ??
+          (_weatherData?.temperature ?? 28.0),
+      'humidity_percent': double.tryParse(_humidityController.text.trim()) ??
+          (_weatherData?.humidity ?? 70.0),
       'ph': double.tryParse(_phController.text.trim()) ?? 7.0,
       'rainfall_mm': double.tryParse(_rainfallController.text.trim()) ?? 0.0,
       'wind_speed_m_s': double.tryParse(_windSpeedController.text.trim()) ?? 0.0,
-      'solar_radiation_mj_m2_day': double.tryParse(_solarController.text.trim()) ?? 0.0,
+      'solar_radiation_mj_m2_day':
+          double.tryParse(_solarController.text.trim()) ?? 0.0,
     };
 
     if (kDebugMode) {
-      debugPrint('================ COLLECTED FARMER INPUTS ================');
+      debugPrint('================ CALLING RECOMMENDATION API ================');
       debugPrint('$collectedData');
-      debugPrint('========================================================');
+      debugPrint('===========================================================');
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle, color: Colors.white),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                l10n.inputsCollectedSuccess,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: const Color(0xFF2E7D32),
-        duration: const Duration(seconds: 4),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    try {
+      final repo = ApiRecommendationRepository(inputs: collectedData);
+      final response = await repo.getRecommendation();
 
-    // Navigate to RecommendationScreen
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const RecommendationScreen(),
-      ),
-    );
+      if (!mounted) return;
+      setState(() {
+        _isSubmitting = false;
+      });
+
+      // 5. Navigate with the REAL RecommendationResponse
+      if (widget.onRecommendationCompleted != null) {
+        widget.onRecommendationCompleted!(response);
+      } else {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => RecommendationScreen(recommendationData: response),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isSubmitting = false;
+      });
+
+      String errorMsg;
+      final errStr = e.toString();
+      if (errStr.contains('SocketException') ||
+          errStr.contains('ClientException') ||
+          errStr.contains('Failed to connect') ||
+          errStr.contains('Network error') ||
+          errStr.contains('XMLHttpRequest error')) {
+        errorMsg =
+            'Cannot connect to recommendation API. Please ensure the backend server is running on http://127.0.0.1:8000.';
+      } else if (e is TimeoutException ||
+          errStr.contains('TimeoutException') ||
+          errStr.contains('timed out')) {
+        errorMsg =
+            'Request to recommendation API timed out after 60 seconds. Please try again.';
+      } else if (e is ApiException ||
+          errStr.contains('ApiException') ||
+          errStr.contains('HttpException')) {
+        errorMsg = 'Recommendation server error: $errStr';
+      } else {
+        errorMsg = 'Failed to generate recommendation: $errStr';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text(errorMsg)),
+            ],
+          ),
+          backgroundColor: Colors.redAccent,
+          duration: const Duration(seconds: 6),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -367,140 +497,302 @@ class _FarmerInputScreenState extends State<FarmerInputScreen> {
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.farmerInputTitle),
-        actions: const [
-          LanguageSelector(),
+      backgroundColor: const Color(0xFFF9F9FF),
+      appBar: widget.isTab
+          ? null
+          : AppBar(
+              title: Text(l10n.farmerInputTitle),
+              backgroundColor: const Color(0xFF012D1D),
+              foregroundColor: Colors.white,
+              actions: const [
+                LanguageSelector(),
+              ],
+            ),
+      drawer: widget.isTab ? null : const FarmerDrawer(),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Stitch Active Assessment Wizard Stepper Card
+            _buildStitchStepperProgressCard(l10n),
+
+            // Active Step Content
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: _buildCurrentStepContent(l10n),
+              ),
+            ),
+
+            // Bottom Navigation Actions
+            _buildBottomNavigationButtons(l10n),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCurrentStepContent(AppLocalizations l10n) {
+    switch (_currentStep) {
+      case 0:
+        return _buildVegetableSelectionStep(l10n);
+      case 1:
+        return _buildAreaStep(l10n);
+      case 2:
+        return _buildLocationStep(l10n);
+      case 3:
+      default:
+        return _buildEnvironmentStep(l10n);
+    }
+  }
+
+  Widget _buildStitchStepperProgressCard(AppLocalizations l10n) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1B4332).withAlpha(10),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
-      drawer: const FarmerDrawer(),
-      body: SafeArea(
-        child: Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme.copyWith(
-                  primary: const Color(0xFF2E7D32),
-                ),
-          ),
-          child: Column(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header: Status indicator + Step counter pill
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildHeader(l10n),
-              _buildProgressIndicator(l10n),
-              Expanded(
-                child: Stepper(
-                  type: StepperType.vertical,
-                  currentStep: _currentStep,
-                  onStepTapped: (step) {
-                    setState(() => _currentStep = step);
-                  },
-                  onStepContinue: _onStepContinue,
-                  onStepCancel: _onStepCancel,
-                  controlsBuilder: (BuildContext context, ControlsDetails details) {
-                    final isLastStep = _currentStep == 3;
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 24.0, bottom: 8.0),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: details.onStepContinue,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF2E7D32),
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                elevation: 2,
-                              ),
-                              child: Text(
-                                isLastStep ? l10n.continueButton : '${l10n.next} →',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ),
-                          ),
-                          if (_currentStep > 0) ...[
-                            const SizedBox(width: 12),
-                            OutlinedButton(
-                              onPressed: details.onStepCancel,
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                side: BorderSide(color: Colors.grey.shade400),
-                              ),
-                              child: Text(
-                                l10n.back,
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.grey.shade800,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    );
-                  },
-                  steps: [
-                    // STEP 1: VEGETABLE SELECTION
-                    Step(
-                      title: Text(
-                        l10n.stepVegetable,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                      ),
-                      subtitle: Text(l10n.selectVegetablePrompt),
-                      isActive: _currentStep >= 0,
-                      state: _currentStep > 0 ? StepState.complete : StepState.indexed,
-                      content: _buildVegetableSelectionStep(l10n),
+              Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF116C4A),
+                      shape: BoxShape.circle,
                     ),
-
-                    // STEP 2: FARM AREA
-                    Step(
-                      title: Text(
-                        l10n.stepArea,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                      ),
-                      subtitle: Text(l10n.farmAreaPrompt),
-                      isActive: _currentStep >= 1,
-                      state: _currentStep > 1 ? StepState.complete : StepState.indexed,
-                      content: _buildAreaStep(l10n),
+                  ),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'ACTIVE ASSESSMENT WIZARD',
+                    style: TextStyle(
+                      color: Color(0xFF116C4A),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
                     ),
-
-                    // STEP 3: FARM LOCATION
-                    Step(
-                      title: Text(
-                        l10n.stepLocation,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                      ),
-                      subtitle: Text(l10n.farmLocationPrompt),
-                      isActive: _currentStep >= 2,
-                      state: _currentStep > 2 ? StepState.complete : StepState.indexed,
-                      content: _buildLocationStep(l10n),
-                    ),
-
-                    // STEP 4: DETAILS
-                    Step(
-                      title: Text(
-                        l10n.stepDetails,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                      ),
-                      subtitle: Text(l10n.stepDetailsPrompt),
-                      isActive: _currentStep >= 3,
-                      state: _currentStep == 3 ? StepState.editing : StepState.indexed,
-                      content: _buildEnvironmentStep(l10n),
-                    ),
-                  ],
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE7EEFF),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'Step ${_currentStep + 1} of 4',
+                  style: const TextStyle(
+                    color: Color(0xFF1E293B),
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 14),
+
+          // Horizontal Connecting Stepper Nodes
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildStepNode(0, Icons.eco, 'Crop'),
+              _buildStepNode(1, Icons.crop_square, 'Land'),
+              _buildStepNode(2, Icons.location_on, 'Location'),
+              _buildStepNode(3, Icons.science, 'Details'),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Title & Subtitle
+          Text(
+            _getStepTitle(l10n),
+            style: const TextStyle(
+              color: Color(0xFF012D1D),
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            _getStepSubtitle(l10n),
+            style: const TextStyle(
+              color: Color(0xFF64748B),
+              fontSize: 12,
+              height: 1.3,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepNode(int index, IconData icon, String label) {
+    final isActive = _currentStep == index;
+    final isDone = _currentStep > index;
+
+    return InkWell(
+      onTap: () {
+        setState(() => _currentStep = index);
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: Column(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isActive
+                  ? const Color(0xFF012D1D)
+                  : isDone
+                      ? const Color(0xFF116C4A)
+                      : const Color(0xFFF1F5F9),
+              border: isActive
+                  ? Border.all(color: const Color(0xFFC1ECD4), width: 3)
+                  : null,
+            ),
+            child: Icon(
+              isDone ? Icons.check : icon,
+              size: 18,
+              color: (isActive || isDone) ? Colors.white : const Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
+              color: isActive ? const Color(0xFF012D1D) : const Color(0xFF64748B),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getStepTitle(AppLocalizations l10n) {
+    switch (_currentStep) {
+      case 0:
+        return 'Select Vegetable & Variety';
+      case 1:
+        return 'Cultivated Land Area & Scale';
+      case 2:
+        return 'Farm Location & Market Proximity';
+      case 3:
+      default:
+        return 'Soil & Climate Calibration';
+    }
+  }
+
+  String _getStepSubtitle(AppLocalizations l10n) {
+    switch (_currentStep) {
+      case 0:
+        return 'Fine-tune dynamic yield perishability models against real-time APMC Mandi indices.';
+      case 1:
+        return 'Enter your total cultivated acreage to determine batch logistics and storage sizing.';
+      case 2:
+        return 'Auto-detect GPS coordinates or specify mandal for precision transport distance calculation.';
+      case 3:
+      default:
+        return 'Adjust seasonal parameters and soil chemistry to maximize ML yield prediction accuracy.';
+    }
+  }
+
+  String _getNextStepName() {
+    switch (_currentStep) {
+      case 0:
+        return 'Land';
+      case 1:
+        return 'Location';
+      case 2:
+        return 'Details';
+      default:
+        return 'Results';
+    }
+  }
+
+  Widget _buildBottomNavigationButtons(AppLocalizations l10n) {
+    final isLastStep = _currentStep == 3;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 0.8)),
+      ),
+      child: Row(
+        children: [
+          if (_currentStep > 0) ...[
+            OutlinedButton(
+              onPressed: _onStepCancel,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF1E293B),
+                side: const BorderSide(color: Color(0xFFCBD5E1)),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: Text(l10n.back),
+            ),
+            const SizedBox(width: 12),
+          ],
+          Expanded(
+            child: ElevatedButton(
+              onPressed: _isSubmitting ? null : _onStepContinue,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF012D1D),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 2,
+              ),
+              child: _isSubmitting
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          isLastStep
+                              ? 'Run AI Market Recommendation'
+                              : 'Continue to ${_getNextStepName()} →',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        if (isLastStep) ...[
+                          const SizedBox(width: 8),
+                          const Icon(Icons.auto_awesome, size: 18),
+                        ],
+                      ],
+                    ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1662,6 +1954,28 @@ class _FarmerInputScreenState extends State<FarmerInputScreen> {
           ),
           const SizedBox(height: 16),
 
+          // Season Dropdown
+          DropdownButtonFormField<String>(
+            key: const Key('season_dropdown'),
+            initialValue: _selectedSeason,
+            decoration: InputDecoration(
+              labelText: l10n.season,
+              prefixIcon: const Icon(Icons.calendar_month_outlined),
+            ),
+            items: _seasons.map((s) {
+              return DropdownMenuItem<String>(
+                value: s,
+                child: Text(_getLocalizedSeason(s, l10n), style: const TextStyle(fontSize: 16)),
+              );
+            }).toList(),
+            onChanged: (val) {
+              if (val != null) {
+                setState(() => _selectedSeason = val);
+              }
+            },
+          ),
+          const SizedBox(height: 16),
+
           // Soil Nutrients Group
           Card(
             elevation: 0,
@@ -1808,6 +2122,7 @@ class _FarmerInputScreenState extends State<FarmerInputScreen> {
     String? unit,
     IconData? icon,
     bool isInteger = false,
+    bool isRequired = false,
     double? minValue = 0.0,
     double? maxValue,
     String? customRangeError,
@@ -1822,7 +2137,10 @@ class _FarmerInputScreenState extends State<FarmerInputScreen> {
       ),
       validator: (value) {
         if (value == null || value.trim().isEmpty) {
-          return l10n.pleaseEnterValidNumber;
+          if (isRequired) {
+            return l10n.pleaseEnterValidNumber;
+          }
+          return null;
         }
         final parsed = double.tryParse(value.trim());
         if (parsed == null) {
@@ -1837,5 +2155,24 @@ class _FarmerInputScreenState extends State<FarmerInputScreen> {
         return null;
       },
     );
+  }
+
+  String _getLocalizedSeason(String season, AppLocalizations l10n) {
+    switch (season) {
+      case 'Kharif':
+        return l10n.seasonKharif;
+      case 'Rabi':
+        return l10n.seasonRabi;
+      case 'Summer':
+        return l10n.seasonSummer;
+      case 'Winter':
+        return l10n.seasonWinter;
+      case 'Autumn':
+        return l10n.seasonAutumn;
+      case 'Whole Year':
+        return l10n.seasonWholeYear;
+      default:
+        return season;
+    }
   }
 }

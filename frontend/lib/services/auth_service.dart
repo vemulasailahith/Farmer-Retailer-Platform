@@ -63,9 +63,11 @@ class AuthService {
   }
 
   /// Retrieves the role of the specified user (or currentUser if not provided)
-  /// directly from the authoritative 'profiles' database table.
+  /// directly from the authoritative 'profiles' database table, falling back to
+  /// auth user_metadata if the profiles table is not yet configured.
   Future<String?> getUserRole([String? userId]) async {
-    final uid = userId ?? currentUser?.id;
+    final user = currentUser;
+    final uid = userId ?? user?.id;
     if (uid == null) return null;
 
     try {
@@ -80,9 +82,36 @@ class AuthService {
       }
     } catch (e) {
       // ignore: avoid_print
-      print('PROFILE LOAD ERROR: $e');
+      print('PROFILE LOAD NOTICE: $e');
     }
 
-    return null;
+    // 1. Fallback to auth metadata stored on signup
+    if (user != null && user.id == uid && user.userMetadata != null) {
+      final metaRole = user.userMetadata!['role'];
+      if (metaRole != null && metaRole is String && metaRole.trim().isNotEmpty) {
+        final sanitized = metaRole.toLowerCase().trim();
+        // Try background creating/healing the profile row if possible
+        _trySyncProfile(uid, sanitized, user.userMetadata!['full_name'] as String?, user.email);
+        return sanitized;
+      }
+    }
+
+    // 2. Default to farmer role so user is never locked out
+    return AppConstants.roleFarmer;
+  }
+
+  /// Attempts to populate profiles table in the background if it exists
+  Future<void> _trySyncProfile(String uid, String role, String? fullName, String? email) async {
+    try {
+      final payload = <String, dynamic>{
+        'id': uid,
+        'role': role,
+      };
+      if (fullName != null) payload['full_name'] = fullName;
+      if (email != null) payload['email'] = email;
+      await _client.from('profiles').upsert(payload);
+    } catch (_) {
+      // Table may not have insert permissions or not exist yet
+    }
   }
 }

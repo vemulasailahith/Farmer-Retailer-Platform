@@ -38,16 +38,23 @@ class LocationResult {
 }
 
 class LocationService {
+  /// In-memory cache for location coordinates across screens and steps
+  static double? cachedLatitude;
+  static double? cachedLongitude;
+  static double? cachedAccuracy;
+
   /// Requests permission if needed, checks service status, and gets current coordinates.
   /// Never returns mock or hard-coded coordinates.
   Future<LocationResult> getCurrentLocation() async {
     try {
       // 1. Check whether location service is enabled on the device / browser
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        return const LocationResult.failure(
-          errorType: LocationErrorType.serviceDisabled,
-        );
+      if (!kIsWeb) {
+        final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (!serviceEnabled) {
+          return const LocationResult.failure(
+            errorType: LocationErrorType.serviceDisabled,
+          );
+        }
       }
 
       // 2. Check permission status
@@ -62,19 +69,49 @@ class LocationService {
         }
       }
 
-      if (permission == LocationPermission.deniedForever) {
+      if (!kIsWeb && permission == LocationPermission.deniedForever) {
         return const LocationResult.failure(
           errorType: LocationErrorType.permissionDeniedForever,
         );
       }
 
-      // 3. Obtain current position with 15-second timeout
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 15),
-        ),
-      );
+      // 3. Obtain current position with fallback for accuracy (desktop browser may lack GNSS hardware)
+      Position position;
+      try {
+        position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 8),
+          ),
+        );
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('High accuracy location failed, trying medium accuracy: $e');
+        }
+        try {
+          position = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.medium,
+              timeLimit: Duration(seconds: 8),
+            ),
+          );
+        } catch (e2) {
+          if (kDebugMode) {
+            debugPrint('Medium accuracy location failed, trying low accuracy: $e2');
+          }
+          position = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.low,
+              timeLimit: Duration(seconds: 8),
+            ),
+          );
+        }
+      }
+
+      // Cache obtained location
+      cachedLatitude = position.latitude;
+      cachedLongitude = position.longitude;
+      cachedAccuracy = position.accuracy;
 
       return LocationResult.success(
         latitude: position.latitude,
@@ -85,6 +122,13 @@ class LocationService {
       if (kDebugMode) {
         debugPrint('Location request timed out: $e');
       }
+      if (cachedLatitude != null && cachedLongitude != null) {
+        return LocationResult.success(
+          latitude: cachedLatitude!,
+          longitude: cachedLongitude!,
+          accuracy: cachedAccuracy,
+        );
+      }
       return LocationResult.failure(
         errorType: LocationErrorType.timeout,
         technicalError: e.toString(),
@@ -92,6 +136,20 @@ class LocationService {
     } catch (e) {
       if (kDebugMode) {
         debugPrint('Location retrieval error: $e');
+      }
+      if (cachedLatitude != null && cachedLongitude != null) {
+        return LocationResult.success(
+          latitude: cachedLatitude!,
+          longitude: cachedLongitude!,
+          accuracy: cachedAccuracy,
+        );
+      }
+      final errStr = e.toString().toLowerCase();
+      if (errStr.contains('denied')) {
+        return LocationResult.failure(
+          errorType: LocationErrorType.permissionDenied,
+          technicalError: e.toString(),
+        );
       }
       return LocationResult.failure(
         errorType: LocationErrorType.unknown,

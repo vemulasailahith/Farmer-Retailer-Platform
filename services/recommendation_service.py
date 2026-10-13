@@ -130,6 +130,7 @@ class FarmToMarketRecommendationService:
                 crop=supply_input["crop"],
                 area_ha=supply_input["area_ha"],
                 year=supply_input["year"],
+                season=supply_input.get("season", "Whole Year"),
                 n_req_kg_per_ha=supply_input["n_req_kg_per_ha"],
                 p_req_kg_per_ha=supply_input["p_req_kg_per_ha"],
                 k_req_kg_per_ha=supply_input["k_req_kg_per_ha"],
@@ -139,6 +140,10 @@ class FarmToMarketRecommendationService:
                 rainfall_mm=supply_input["rainfall_mm"],
                 wind_speed_m_s=supply_input["wind_speed_m_s"],
                 solar_radiation_mj_m2_day=supply_input["solar_radiation_mj_m2_day"],
+                fertilizer=supply_input.get("fertilizer") if supply_input.get("fertilizer") is not None else 0.0,
+                pesticide=supply_input.get("pesticide") if supply_input.get("pesticide") is not None else 0.0,
+                max_temperature=supply_input.get("max_temperature") or supply_input.get("max_temp_c"),
+                min_temperature=supply_input.get("min_temperature") or supply_input.get("min_temp_c"),
             )
         except Exception as e:
             raise RuntimeError(f"Supply prediction failed: {str(e)}") from e

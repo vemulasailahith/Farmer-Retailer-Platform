@@ -3,6 +3,8 @@ import '../l10n/app_localizations.dart';
 import '../services/auth_service.dart';
 import '../services/language_service.dart';
 import '../screens/farmer/farmer_input_screen.dart';
+import '../screens/farmer/farmer_orders_screen.dart';
+import '../screens/farmer/live_shipment_screen.dart';
 
 class FarmerDrawer extends StatelessWidget {
   const FarmerDrawer({super.key});
@@ -103,7 +105,12 @@ class FarmerDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final currentUser = AuthService().currentUser;
+    dynamic currentUser;
+    try {
+      currentUser = AuthService().currentUser;
+    } catch (_) {
+      currentUser = null;
+    }
 
     // Safely extract display name or email prefix
     final rawName = currentUser?.userMetadata?['full_name'] as String?;
@@ -203,51 +210,37 @@ class FarmerDrawer extends StatelessWidget {
 
                 const Divider(height: 1),
 
-                // 3. My Orders (Coming Soon)
+                // 3. My Orders
                 ListTile(
-                  leading: const Icon(Icons.inventory_2_outlined, color: Colors.blueGrey, size: 26),
+                  leading: const Icon(Icons.receipt_long_outlined, color: Color(0xFF1B4332), size: 26),
                   title: Text(
                     l10n.myOrders,
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  trailing: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      l10n.comingSoon,
-                      style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
-                    ),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                   onTap: () {
                     Navigator.of(context).pop();
-                    _showComingSoonDialog(context, l10n.myOrders);
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const FarmerOrdersScreen(isTab: false),
+                      ),
+                    );
                   },
                 ),
 
-                // 4. Transport Tracking (Coming Soon)
+                // 4. Transport Tracking
                 ListTile(
-                  leading: const Icon(Icons.local_shipping_outlined, color: Colors.blueGrey, size: 26),
+                  leading: const Icon(Icons.local_shipping_outlined, color: Color(0xFF1B4332), size: 26),
                   title: Text(
                     l10n.transportTracking,
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  trailing: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      l10n.comingSoon,
-                      style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
-                    ),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                   onTap: () {
                     Navigator.of(context).pop();
-                    _showComingSoonDialog(context, l10n.transportTracking);
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const LiveShipmentScreen(isTab: false),
+                      ),
+                    );
                   },
                 ),
 

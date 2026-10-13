@@ -1,14 +1,34 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+/// Web-compatible exception for API HTTP failures (replaces dart:io HttpException)
+class ApiException implements Exception {
+  final String message;
+  final int? statusCode;
+  final Uri? uri;
+
+  ApiException(this.message, {this.statusCode, this.uri});
+
+  @override
+  String toString() => message;
+}
+
 class ApiService {
-  static const String baseUrl = 'http://127.0.0.1:8000';
+  static String? overrideBaseUrl;
+
+  static String get baseUrl {
+    if (overrideBaseUrl != null) return overrideBaseUrl!;
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:8000';
+    }
+    return 'http://127.0.0.1:8000';
+  }
 
   Future<Map<String, dynamic>> getRecommendation({
     required Map<String, dynamic> data,
-    required File imageFile,
+    required List<int> imageBytes,
   }) async {
     final uri = Uri.parse('$baseUrl/api/v1/recommend');
 
@@ -19,9 +39,10 @@ class ApiService {
       request.fields['data'] = jsonEncode(data);
 
       // Attach produce image as multipart file field named 'image'
-      final multipartFile = await http.MultipartFile.fromPath(
+      final multipartFile = http.MultipartFile.fromBytes(
         'image',
-        imageFile.path,
+        imageBytes,
+        filename: 'produce.jpg',
       );
       request.files.add(multipartFile);
 
@@ -46,22 +67,20 @@ class ApiService {
         }
       }
 
-      // Handle non-2xx responses
-      throw HttpException(
+      // Handle non-2xx responses using web-safe ApiException instead of dart:io HttpException
+      throw ApiException(
         'Recommendation API failed with HTTP ${response.statusCode}: ${response.body}',
+        statusCode: response.statusCode,
         uri: uri,
       );
     } on TimeoutException catch (e) {
       throw TimeoutException(
         'Request to recommendation API timed out after 60 seconds: ${e.message}',
       );
-    } on SocketException catch (e) {
-      throw SocketException(
-        'Network error connecting to recommendation API at $baseUrl: ${e.message}',
-      );
     } on http.ClientException catch (e) {
-      throw Exception(
-        'HTTP client error during recommendation request: ${e.message}',
+      throw http.ClientException(
+        'Network error connecting to recommendation API at $baseUrl: ${e.message}',
+        uri,
       );
     } catch (e) {
       if (e is Exception) {

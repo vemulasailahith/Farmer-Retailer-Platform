@@ -1371,6 +1371,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Detailed market trade and logistics view.'**
   String get marketDetailsNote;
+
+  /// No description provided for @season.
+  ///
+  /// In en, this message translates to:
+  /// **'Season'**
+  String get season;
+
+  /// No description provided for @seasonKharif.
+  ///
+  /// In en, this message translates to:
+  /// **'Kharif'**
+  String get seasonKharif;
+
+  /// No description provided for @seasonRabi.
+  ///
+  /// In en, this message translates to:
+  /// **'Rabi'**
+  String get seasonRabi;
+
+  /// No description provided for @seasonSummer.
+  ///
+  /// In en, this message translates to:
+  /// **'Summer'**
+  String get seasonSummer;
+
+  /// No description provided for @seasonWinter.
+  ///
+  /// In en, this message translates to:
+  /// **'Winter'**
+  String get seasonWinter;
+
+  /// No description provided for @seasonAutumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Autumn'**
+  String get seasonAutumn;
+
+  /// No description provided for @seasonWholeYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Whole Year'**
+  String get seasonWholeYear;
 }
 
 class _AppLocalizationsDelegate

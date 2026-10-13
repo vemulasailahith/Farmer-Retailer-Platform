@@ -662,4 +662,25 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get marketDetailsNote => 'विस्तृत बाजार व्यापार और रसद दृश्य।';
+
+  @override
+  String get season => 'मौसम / सीजन';
+
+  @override
+  String get seasonKharif => 'खरीफ';
+
+  @override
+  String get seasonRabi => 'रबी';
+
+  @override
+  String get seasonSummer => 'जायद / गर्मी';
+
+  @override
+  String get seasonWinter => 'सर्दियां';
+
+  @override
+  String get seasonAutumn => 'शरद ऋतु';
+
+  @override
+  String get seasonWholeYear => 'पूरा साल';
 }

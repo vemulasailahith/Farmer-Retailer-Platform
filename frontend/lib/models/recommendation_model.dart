@@ -10,6 +10,8 @@ class SupplyData {
   final double predictedYieldKgPerHa;
   final double expectedSupplyKg;
   final double expectedSupplyTonnes;
+  final String predictionSource;
+  final bool isDemoPrediction;
 
   const SupplyData({
     required this.commodity,
@@ -19,9 +21,17 @@ class SupplyData {
     required this.predictedYieldKgPerHa,
     required this.expectedSupplyKg,
     required this.expectedSupplyTonnes,
+    this.predictionSource = 'ml_model',
+    this.isDemoPrediction = false,
   });
 
   factory SupplyData.fromJson(Map<String, dynamic> json) {
+    final source = json['prediction_source']?.toString() ?? 'ml_model';
+    final isDemo = json['is_demo_prediction'] == true ||
+        source.toLowerCase() == 'demo_fallback' ||
+        source.toLowerCase().contains('fallback') ||
+        source.toLowerCase().contains('demo');
+
     return SupplyData(
       commodity: json['commodity']?.toString() ?? json['crop']?.toString() ?? 'Rice',
       state: json['state']?.toString() ?? json['state_name']?.toString() ?? '',
@@ -30,6 +40,8 @@ class SupplyData {
       predictedYieldKgPerHa: _toDouble(json['predicted_yield_kg_per_ha'] ?? json['predicted_yield']) ?? 0.0,
       expectedSupplyKg: _toDouble(json['expected_supply_kg'] ?? json['supply_kg']) ?? 0.0,
       expectedSupplyTonnes: _toDouble(json['expected_supply_tonnes'] ?? json['supply_tonnes']) ?? 0.0,
+      predictionSource: source,
+      isDemoPrediction: isDemo,
     );
   }
 
@@ -41,6 +53,8 @@ class SupplyData {
     'predicted_yield_kg_per_ha': predictedYieldKgPerHa,
     'expected_supply_kg': expectedSupplyKg,
     'expected_supply_tonnes': expectedSupplyTonnes,
+    'prediction_source': predictionSource,
+    'is_demo_prediction': isDemoPrediction,
   };
 }
 
@@ -101,7 +115,12 @@ class TransportData {
 
   factory TransportData.fromJson(Map<String, dynamic> json) {
     return TransportData(
-      transportCost: _toDouble(json['transport_cost'] ?? json['cost']) ?? 0.0,
+      transportCost: _toDouble(
+            json['total_transport_cost'] ??
+                json['transport_cost'] ??
+                json['cost'],
+          ) ??
+          0.0,
     );
   }
 
@@ -127,9 +146,17 @@ class SpoilageData {
     final pct = _toDouble(json['spoilage_percentage'] ?? json['spoilage_pct']) ?? 0.0;
     return SpoilageData(
       spoilagePercentage: pct,
-      saleableQuantityKg: _toDouble(json['saleable_quantity'] ?? json['saleable_quantity_kg']) ?? 0.0,
-      spoiledQuantityKg: _toDouble(json['spoiled_quantity_kg']) ?? 0.0,
-      riskLevel: json['risk_level']?.toString() ?? (pct < 20 ? 'LOW' : 'MEDIUM'),
+      saleableQuantityKg: _toDouble(
+            json['estimated_saleable_kg'] ??
+                json['saleable_quantity'] ??
+                json['saleable_quantity_kg'],
+          ) ??
+          0.0,
+      spoiledQuantityKg: _toDouble(
+            json['estimated_spoiled_kg'] ?? json['spoiled_quantity_kg'],
+          ) ??
+          0.0,
+      riskLevel: json['risk_level']?.toString().toUpperCase() ?? (pct < 20 ? 'LOW' : 'MEDIUM'),
     );
   }
 

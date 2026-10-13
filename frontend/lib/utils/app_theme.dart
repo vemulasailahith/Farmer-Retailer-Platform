@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  static const Color primaryGreen = Color(0xFF2E7D32);
-  static const Color accentGreen = Color(0xFF4CAF50);
-  static const Color backgroundLight = Color(0xFFF8F9FA);
+  static const Color primaryGreen = Color(0xFF1B4332);
+  static const Color deepWoodland = Color(0xFF2D6A4F);
+  static const Color secondaryGreen = Color(0xFF40916C);
+  static const Color accentLeaf = Color(0xFF52B788);
+  static const Color mintSurface = Color(0xFFD8F3DC);
+  static const Color mintContainer = Color(0xFFE8F5E9);
+  static const Color backgroundLight = Color(0xFFF8FAF8);
+  static const Color contentSlate = Color(0xFF1E293B);
 
   static ThemeData get lightTheme {
     return ThemeData(
@@ -11,14 +16,15 @@ class AppTheme {
       colorScheme: ColorScheme.fromSeed(
         seedColor: primaryGreen,
         primary: primaryGreen,
-        secondary: accentGreen,
+        secondary: secondaryGreen,
         surface: backgroundLight,
       ),
+      scaffoldBackgroundColor: backgroundLight,
       appBarTheme: const AppBarTheme(
         backgroundColor: primaryGreen,
         foregroundColor: Colors.white,
         elevation: 0,
-        centerTitle: true,
+        centerTitle: false,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(

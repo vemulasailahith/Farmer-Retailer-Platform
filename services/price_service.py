@@ -3,6 +3,56 @@ import joblib
 import pandas as pd
 
 
+def _safe_joblib_load(file_path):
+    """
+    Loads joblib serialized models with backward/forward compatibility shims
+    for NumPy 1.x / 2.x BitGenerator and PCG64 state unpickling.
+    """
+    import pickle
+    import numpy.random._pickle as np_pickle
+    import numpy.random.bit_generator as bg
+    from numpy.random import Generator
+
+    orig_bg_ctor = getattr(np_pickle, "__bit_generator_ctor", None)
+    orig_gen_ctor = getattr(np_pickle, "__generator_ctor", None)
+    orig_load_build = pickle._Unpickler.load_build
+
+    def patched_bg_ctor(name="MT19937"):
+        if isinstance(name, bg.BitGenerator):
+            return name
+        if isinstance(name, type) and issubclass(name, bg.BitGenerator):
+            return name()
+        if isinstance(name, str) and name in np_pickle.BitGenerators:
+            return np_pickle.BitGenerators[name]()
+        if orig_bg_ctor:
+            return orig_bg_ctor(name)
+        raise ValueError(f"Unknown BitGenerator: {name}")
+
+    def patched_gen_ctor(bit_generator_name="MT19937", bit_generator_ctor=patched_bg_ctor):
+        if isinstance(bit_generator_name, bg.BitGenerator):
+            return Generator(bit_generator_name)
+        return Generator(bit_generator_ctor(bit_generator_name))
+
+    def patched_load_build(self):
+        inst = self.stack[-2]
+        state = self.stack[-1]
+        if isinstance(inst, bg.BitGenerator) and isinstance(state, tuple):
+            self.stack[-1] = state[0]
+        return orig_load_build(self)
+
+    try:
+        np_pickle.__bit_generator_ctor = patched_bg_ctor
+        np_pickle.__generator_ctor = patched_gen_ctor
+        pickle._Unpickler.load_build = patched_load_build
+        return joblib.load(file_path)
+    finally:
+        if orig_bg_ctor:
+            np_pickle.__bit_generator_ctor = orig_bg_ctor
+        if orig_gen_ctor:
+            np_pickle.__generator_ctor = orig_gen_ctor
+        pickle._Unpickler.load_build = orig_load_build
+
+
 class PricePredictionService:
     def __init__(self):
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -29,7 +79,7 @@ class PricePredictionService:
                 f"Price preprocessing artifact not found: {preprocessing_path}"
             )
 
-        self.model = joblib.load(model_path)
+        self.model = _safe_joblib_load(model_path)
         self.preprocessing = joblib.load(preprocessing_path)
 
         self.categorical_features = self.preprocessing[

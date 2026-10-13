@@ -211,5 +211,12 @@
   "capacityAvailable": "Available",
   "viewMarketDetails": "View Market Details",
   "startNewRecommendation": "Start New Recommendation",
-  "marketDetailsNote": "Detailed market trade and logistics view."
+  "marketDetailsNote": "Detailed market trade and logistics view.",
+  "season": "Season",
+  "seasonKharif": "Kharif",
+  "seasonRabi": "Rabi",
+  "seasonSummer": "Summer",
+  "seasonWinter": "Winter",
+  "seasonAutumn": "Autumn",
+  "seasonWholeYear": "Whole Year"
 }

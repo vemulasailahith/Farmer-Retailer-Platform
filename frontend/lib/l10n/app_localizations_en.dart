@@ -663,4 +663,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get marketDetailsNote => 'Detailed market trade and logistics view.';
+
+  @override
+  String get season => 'Season';
+
+  @override
+  String get seasonKharif => 'Kharif';
+
+  @override
+  String get seasonRabi => 'Rabi';
+
+  @override
+  String get seasonSummer => 'Summer';
+
+  @override
+  String get seasonWinter => 'Winter';
+
+  @override
+  String get seasonAutumn => 'Autumn';
+
+  @override
+  String get seasonWholeYear => 'Whole Year';
 }

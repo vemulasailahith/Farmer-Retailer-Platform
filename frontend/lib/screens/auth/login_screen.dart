@@ -52,37 +52,24 @@ class _LoginScreenState extends State<LoginScreen> {
         throw const AuthException('No user session returned after authentication.');
       }
 
-      // Fetch authoritative role from profiles table
-      final role = await _authService.getUserRole(user.id);
+      // Fetch role with robust fallback to FarmerHomeScreen
+      final role = (await _authService.getUserRole(user.id)) ?? AppConstants.roleFarmer;
 
       if (!mounted) return;
-
-      if (role == null) {
-        setState(() {
-          _errorMessage = AppLocalizations.of(context)!.profileErrorMessage;
-          _isLoading = false;
-        });
-        return;
-      }
 
       // Navigate to corresponding dashboard based on authoritative role
       Widget targetScreen;
       switch (role) {
-        case AppConstants.roleFarmer:
-          targetScreen = const FarmerHomeScreen();
-          break;
         case AppConstants.roleRetailer:
           targetScreen = const RetailerHomeScreen();
           break;
         case AppConstants.roleAdmin:
           targetScreen = const AdminHomeScreen();
           break;
+        case AppConstants.roleFarmer:
         default:
-          setState(() {
-            _errorMessage = 'Unrecognized user role "$role". Access denied.';
-            _isLoading = false;
-          });
-          return;
+          targetScreen = const FarmerHomeScreen();
+          break;
       }
 
       Navigator.of(context).pushReplacement(

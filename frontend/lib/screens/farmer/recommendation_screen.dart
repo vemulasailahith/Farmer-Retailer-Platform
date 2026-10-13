@@ -11,11 +11,15 @@ import '../../widgets/language_selector.dart';
 class RecommendationScreen extends StatefulWidget {
   final RecommendationResponse? recommendationData;
   final RecommendationRepository? repository;
+  final bool isTab;
+  final VoidCallback? onDispatchShipment;
 
   const RecommendationScreen({
     super.key,
     this.recommendationData,
     this.repository,
+    this.isTab = false,
+    this.onDispatchShipment,
   });
 
   @override
@@ -37,6 +41,16 @@ class _RecommendationScreenState extends State<RecommendationScreen> {
       _data = widget.recommendationData;
     } else {
       _fetchRecommendation();
+    }
+  }
+
+  @override
+  void didUpdateWidget(RecommendationScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.recommendationData != null && widget.recommendationData != oldWidget.recommendationData) {
+      setState(() {
+        _data = widget.recommendationData;
+      });
     }
   }
 
@@ -68,8 +82,10 @@ class _RecommendationScreenState extends State<RecommendationScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8F5),
-      appBar: AppBar(
+      backgroundColor: const Color(0xFFF9F9FF),
+      appBar: widget.isTab
+          ? null
+          : AppBar(
         backgroundColor: const Color(0xFF2E7D32),
         foregroundColor: Colors.white,
         elevation: 1,
@@ -534,6 +550,31 @@ class _RecommendationScreenState extends State<RecommendationScreen> {
                   color: Color(0xFF1B5E20),
                 ),
               ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: supply.isDemoPrediction
+                      ? const Color(0xFFFFF3E0)
+                      : const Color(0xFFE8F5E9),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: supply.isDemoPrediction
+                        ? const Color(0xFFFFB74D)
+                        : const Color(0xFF81C784),
+                  ),
+                ),
+                child: Text(
+                  supply.isDemoPrediction ? 'Demo Estimate' : 'ML Prediction',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: supply.isDemoPrediction
+                        ? const Color(0xFFE65100)
+                        : const Color(0xFF2E7D32),
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -598,7 +639,8 @@ class _RecommendationScreenState extends State<RecommendationScreen> {
               Expanded(
                 child: _buildSimpleInfoTile(
                   label: l10n.farmAreaLabel,
-                  value: '${supply.farmAreaHa.toStringAsFixed(0)} ha',
+                  value:
+                      '${supply.farmAreaHa % 1 == 0 ? supply.farmAreaHa.toStringAsFixed(0) : supply.farmAreaHa.toStringAsFixed(1)} ha',
                   icon: Icons.aspect_ratio,
                 ),
               ),
@@ -1302,6 +1344,35 @@ class _RecommendationScreenState extends State<RecommendationScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Lock Best Deal & Dispatch Shipment (Stitch Primary CTA)
+        ElevatedButton.icon(
+          onPressed: () {
+            if (widget.onDispatchShipment != null) {
+              widget.onDispatchShipment!();
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Shipment dispatch initiated successfully.'),
+                  backgroundColor: Color(0xFF1B4332),
+                ),
+              );
+            }
+          },
+          icon: const Icon(Icons.local_shipping, color: Colors.white, size: 20),
+          label: const Text(
+            'Lock Best Deal & Dispatch Shipment',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF012D1D),
+            foregroundColor: Colors.white,
+            minimumSize: const Size.fromHeight(54),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            elevation: 2,
+          ),
+        ),
+        const SizedBox(height: 12),
+
         // View Market Details Button
         OutlinedButton.icon(
           onPressed: () {
@@ -1331,7 +1402,9 @@ class _RecommendationScreenState extends State<RecommendationScreen> {
         ElevatedButton.icon(
           onPressed: () {
             // Navigate back to the Farmer Input flow
-            Navigator.of(context).pop();
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
           },
           icon: const Icon(Icons.replay),
           label: Text(

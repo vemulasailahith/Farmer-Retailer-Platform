@@ -211,5 +211,12 @@
   "capacityAvailable": "అందుబాటులో ఉంది",
   "viewMarketDetails": "మార్కెట్ వివరాలు చూడండి",
   "startNewRecommendation": "కొత్త సిఫార్సు ప్రారంభించండి",
-  "marketDetailsNote": "వివరణాత్మక మార్కెట్ వాణిజ్య సమాచారం."
+  "marketDetailsNote": "వివరణాత్మక మార్కెట్ వాణిజ్య సమాచారం.",
+  "season": "పంట కాలం (సీజన్)",
+  "seasonKharif": "ఖరీఫ్",
+  "seasonRabi": "రబీ",
+  "seasonSummer": "వేసవి",
+  "seasonWinter": "శీతాకాలం",
+  "seasonAutumn": "శరదృతువు",
+  "seasonWholeYear": "పూర్తి సంవత్సరం"
 }

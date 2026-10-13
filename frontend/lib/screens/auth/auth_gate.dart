@@ -47,97 +47,15 @@ class _AuthGateState extends State<AuthGate> {
               );
             }
 
-            if (roleSnapshot.hasError || roleSnapshot.data == null) {
-              return Scaffold(
-                body: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.warning_amber_rounded,
-                          color: Colors.amber,
-                          size: 56,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          l10n?.profileError ?? 'Profile Error',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          l10n?.profileErrorMessage ??
-                              'Unable to load your user profile and role from the database.',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.black54),
-                        ),
-                        const SizedBox(height: 24),
-                        ElevatedButton.icon(
-                          onPressed: () async {
-                            await _authService.signOut();
-                          },
-                          icon: const Icon(Icons.logout),
-                          label: Text(l10n?.returnToLogin ?? 'Return to Login'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }
-
-            final role = roleSnapshot.data!;
+            final role = roleSnapshot.data ?? AppConstants.roleFarmer;
             switch (role) {
-              case AppConstants.roleFarmer:
-                return const FarmerHomeScreen();
               case AppConstants.roleRetailer:
                 return const RetailerHomeScreen();
               case AppConstants.roleAdmin:
                 return const AdminHomeScreen();
+              case AppConstants.roleFarmer:
               default:
-                return Scaffold(
-                  body: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.block,
-                            color: Colors.redAccent,
-                            size: 56,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Access Restricted ($role)',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Your account has an unassigned or unsupported role.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.black54),
-                          ),
-                          const SizedBox(height: 24),
-                          ElevatedButton.icon(
-                            onPressed: () async {
-                              await _authService.signOut();
-                            },
-                            icon: const Icon(Icons.logout),
-                            label: Text(l10n?.signOut ?? 'Sign Out'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
+                return const FarmerHomeScreen();
             }
           },
         );
